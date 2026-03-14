@@ -1,1 +1,10 @@
 @import "tailwindcss";
+
+@layer utilities {
+  input[type="range"]::-webkit-slider-thumb {
+    @apply w-4 h-4 rounded-full bg-blue-600 shadow-md border-2 border-white appearance-none cursor-pointer relative z-20;
+  }
+  input[type="range"]::-moz-range-thumb {
+    @apply w-4 h-4 rounded-full bg-blue-600 shadow-md border-2 border-white appearance-none cursor-pointer relative z-20;
+  }
+}
