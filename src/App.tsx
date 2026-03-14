@@ -43,6 +43,7 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const wasPlayingRef = useRef(false);
 
   // Encontrar el evento activo (el más cercano que ya haya pasado)
   const activeEvent = useMemo(() => {
@@ -127,13 +128,20 @@ export default function App() {
     <div className="h-[100dvh] bg-slate-50 text-slate-800 font-sans flex flex-col overflow-hidden selection:bg-blue-200">
       
       {/* Header */}
-      <header className="py-2 px-4 bg-white border-b border-slate-200 shrink-0 z-10 shadow-sm text-center">
-        <h1 className="text-lg md:text-xl font-extrabold tracking-tight bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent mb-0.5">
-          Cronología de la Tierra
-        </h1>
-        <p className="text-slate-500 text-[9px] md:text-[10px] font-medium">
-          Toda la historia de nuestro planeta en millones de años.
-        </p>
+      <header className="py-2 px-4 bg-white border-b border-slate-200 shrink-0 z-10 shadow-sm flex items-center justify-between">
+        <div className="text-left">
+          <h1 className="text-lg md:text-xl font-extrabold tracking-tight bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent mb-0.5">
+            Cronología de la Tierra
+          </h1>
+          <p className="text-slate-500 text-[9px] md:text-[10px] font-medium">
+            Toda la historia de nuestro planeta en millones de años.
+          </p>
+        </div>
+        <div className="text-right shrink-0">
+          <div className="text-xl md:text-2xl font-black font-mono tracking-tighter text-blue-600 bg-blue-50 px-3 py-1 rounded-lg border border-blue-100 shadow-sm">
+            {Math.round(currentMa)} <span className="text-xs md:text-sm font-sans font-bold text-blue-400">Ma</span>
+          </div>
+        </div>
       </header>
 
       {/* Main Content Area */}
@@ -142,15 +150,8 @@ export default function App() {
         {/* Planet Section */}
         <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 shrink-0 lg:shrink bg-slate-100/50 border-b lg:border-b-0 lg:border-r border-slate-200 overflow-hidden relative">
           
-          {/* Indicador de Ma Arriba de la Tierra */}
-          <div className="absolute top-4 md:top-8 left-1/2 -translate-x-1/2 text-center z-20">
-            <div className="text-2xl md:text-3xl font-black font-mono tracking-tighter text-blue-600 drop-shadow-sm bg-white/80 px-4 py-1 rounded-full backdrop-blur-sm border border-blue-100 shadow-sm">
-              {Math.round(currentMa)} <span className="text-sm md:text-base font-sans font-bold text-blue-400">Ma</span>
-            </div>
-          </div>
-
           {/* Contenedor Principal del Reloj */}
-          <div className="relative w-full max-w-[320px] md:max-w-[450px] aspect-square flex items-center justify-center mt-8">
+          <div className="relative w-full max-w-[320px] md:max-w-[450px] aspect-square flex items-center justify-center mt-4 lg:mt-0">
             
             {/* SVG Circular Timeline */}
             <svg 
@@ -196,6 +197,9 @@ export default function App() {
                   <stop offset="0%" stopColor="#0ea5e9" />
                   <stop offset="100%" stopColor="#3b82f6" />
                 </linearGradient>
+                <filter id="textShadow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feDropShadow dx="0" dy="1" stdDeviation="1" floodColor="#000000" floodOpacity="0.6"/>
+                </filter>
               </defs>
 
               {/* Marcadores de eventos */}
@@ -224,11 +228,12 @@ export default function App() {
                           x={50 + Math.cos(angle) * (radius + 8)}
                           y={50 + Math.sin(angle) * (radius + 8)}
                           fill={ev.color}
-                          fontSize="4"
-                          fontWeight="bold"
+                          fontSize="5"
+                          fontWeight="900"
                           textAnchor="middle"
                           alignmentBaseline="middle"
-                          className="drop-shadow-sm pointer-events-none"
+                          className="pointer-events-none"
+                          filter="url(#textShadow)"
                         >
                           {ev.ma}
                         </motion.text>
@@ -299,7 +304,22 @@ export default function App() {
         </div>
 
         {/* Main: Registro Evolutivo (Compacto y Adaptable) */}
-        <div className="h-48 lg:h-auto lg:w-80 shrink-0 bg-white border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col shadow-[0_-5px_20px_-15px_rgba(0,0,0,0.1)] lg:shadow-none z-10">
+        <div 
+          className="h-48 lg:h-auto lg:w-80 shrink-0 bg-white border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col shadow-[0_-5px_20px_-15px_rgba(0,0,0,0.1)] lg:shadow-none z-10"
+          onPointerDown={() => {
+            wasPlayingRef.current = isPlaying;
+            setIsPlaying(false);
+          }}
+          onPointerUp={() => {
+            if (wasPlayingRef.current) setIsPlaying(true);
+          }}
+          onPointerLeave={() => {
+            if (wasPlayingRef.current && !isPlaying) setIsPlaying(true);
+          }}
+          onPointerCancel={() => {
+            if (wasPlayingRef.current && !isPlaying) setIsPlaying(true);
+          }}
+        >
           <div className="p-2 md:p-3 border-b border-slate-100 bg-slate-50/80 backdrop-blur-sm shrink-0 flex items-center gap-2">
             <History size={14} className="text-blue-500" />
             <h3 className="font-bold text-slate-700 text-[11px] md:text-xs uppercase tracking-wider">
