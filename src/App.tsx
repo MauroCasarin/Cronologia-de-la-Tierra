@@ -43,7 +43,6 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const wasPlayingRef = useRef(false);
 
   // Parallax setup
   const mouseX = useMotionValue(0);
@@ -52,6 +51,12 @@ export default function App() {
   const smoothMouseY = useSpring(mouseY, { damping: 25, stiffness: 150 });
   const backgroundX = useTransform(smoothMouseX, [-1, 1], ['-3%', '3%']);
   const backgroundY = useTransform(smoothMouseY, [-1, 1], ['-3%', '3%']);
+  const planetX = useTransform(smoothMouseX, [-1, 1], ['15px', '-15px']);
+  const planetY = useTransform(smoothMouseY, [-1, 1], ['15px', '-15px']);
+  const clockX = useTransform(smoothMouseX, [-1, 1], ['5px', '-5px']);
+  const clockY = useTransform(smoothMouseY, [-1, 1], ['5px', '-5px']);
+  const innerTextX = useTransform(smoothMouseX, [-1, 1], ['25px', '-25px']);
+  const innerTextY = useTransform(smoothMouseY, [-1, 1], ['25px', '-25px']);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -185,10 +190,11 @@ export default function App() {
           <div className="relative w-full max-w-[320px] md:max-w-[450px] aspect-square flex items-center justify-center mt-4 lg:mt-0">
             
             {/* SVG Circular Timeline */}
-            <svg 
+            <motion.svg 
               ref={svgRef}
               viewBox="0 0 100 100" 
               className="absolute inset-0 w-full h-full overflow-visible touch-none cursor-crosshair drop-shadow-xl z-10"
+              style={{ x: clockX, y: clockY }}
               onPointerDown={(e) => {
                 setIsDragging(true);
                 // Hack para que el primer clic también actualice
@@ -273,14 +279,16 @@ export default function App() {
                   </g>
                 );
               })}
-            </svg>
+            </motion.svg>
 
             {/* Contenido Central (Planeta 3D y Evento Activo) */}
             <motion.div 
               className="absolute inset-0 m-auto w-[70%] h-[70%] rounded-full flex flex-col items-center justify-center p-4 text-center text-white overflow-hidden shadow-2xl transition-colors duration-1000"
               style={{
                 background: `radial-gradient(circle at 30% 30%, ${activeEvent.color} 0%, #1e3a8a 60%, #0f172a 100%)`,
-                boxShadow: `inset -15px -15px 25px rgba(0,0,0,0.6), inset 5px 5px 15px rgba(255,255,255,0.2), 0 10px 30px rgba(0,0,0,0.15)`
+                boxShadow: `inset -15px -15px 25px rgba(0,0,0,0.6), inset 5px 5px 15px rgba(255,255,255,0.2), 0 10px 30px rgba(0,0,0,0.15)`,
+                x: planetX,
+                y: planetY
               }}
               animate={{ rotate: [-1.5, 1.5, -1.5] }}
               transition={{ rotate: { repeat: Infinity, duration: 8, ease: "easeInOut" } }}
@@ -318,6 +326,7 @@ export default function App() {
                   exit={{ opacity: 0, scale: 1.1 }}
                   transition={{ duration: 0.3 }}
                   className="relative z-10 flex flex-col items-center"
+                  style={{ x: innerTextX, y: innerTextY }}
                 >
                   <div 
                     className="w-10 h-10 md:w-14 md:h-14 rounded-full flex items-center justify-center mb-2 shadow-lg"
@@ -336,26 +345,21 @@ export default function App() {
 
         {/* Main: Registro Evolutivo (Compacto y Adaptable) */}
         <div 
-          className="h-48 lg:h-auto lg:w-80 shrink-0 bg-white/85 backdrop-blur-md border-t lg:border-t-0 lg:border-l border-white/20 flex flex-col shadow-[0_-5px_20px_-15px_rgba(0,0,0,0.1)] lg:shadow-none z-10"
-          onPointerDown={() => {
-            wasPlayingRef.current = isPlaying;
-            setIsPlaying(false);
-          }}
-          onPointerUp={() => {
-            if (wasPlayingRef.current) setIsPlaying(true);
-          }}
-          onPointerLeave={() => {
-            if (wasPlayingRef.current && !isPlaying) setIsPlaying(true);
-          }}
-          onPointerCancel={() => {
-            if (wasPlayingRef.current && !isPlaying) setIsPlaying(true);
-          }}
+          className="h-48 lg:h-auto lg:w-80 shrink-0 bg-white/85 backdrop-blur-md border-t lg:border-t-0 lg:border-l border-white/20 flex flex-col shadow-[0_-5px_20px_-15px_rgba(0,0,0,0.1)] lg:shadow-none z-10 cursor-pointer"
+          onClick={() => setIsPlaying(false)}
+          onDoubleClick={() => setIsPlaying(true)}
+          title="1 clic: Pausa | 2 clics: Play"
         >
-          <div className="p-2 md:p-3 border-b border-slate-200/50 bg-white/50 backdrop-blur-sm shrink-0 flex items-center gap-2">
-            <History size={14} className="text-blue-500" />
-            <h3 className="font-bold text-slate-700 text-[11px] md:text-xs uppercase tracking-wider">
-              Registro Evolutivo
-            </h3>
+          <div className="p-2 md:p-3 border-b border-slate-200/50 bg-white/50 backdrop-blur-sm shrink-0 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <History size={14} className="text-blue-500" />
+              <h3 className="font-bold text-slate-700 text-[11px] md:text-xs uppercase tracking-wider">
+                Registro Evolutivo
+              </h3>
+            </div>
+            <span className="text-[8px] md:text-[9px] text-slate-400 font-medium px-2 py-0.5 bg-white/50 rounded-full border border-slate-200/50">
+              1 clic: Pausa | 2: Play
+            </span>
           </div>
           
           <div ref={listRef} className="flex-1 overflow-y-auto p-2 space-y-2 scroll-smooth">
@@ -370,7 +374,11 @@ export default function App() {
                 return (
                   <motion.div 
                     key={ev.title}
-                    onClick={() => setCurrentMa(ev.ma)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCurrentMa(ev.ma);
+                      setIsPlaying(false);
+                    }}
                     initial={{ opacity: 0, y: 10, scale: 0.98 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     className={`flex gap-2 p-2 md:p-3 rounded-xl border transition-all duration-300 cursor-pointer ${
