@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'motion/react';
 import { 
   Globe, 
   Mountain, 
@@ -44,6 +44,25 @@ export default function App() {
   const svgRef = useRef<SVGSVGElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const wasPlayingRef = useRef(false);
+
+  // Parallax setup
+  const mouseX = useMotionValue(0);
+  const mouseY = useMotionValue(0);
+  const smoothMouseX = useSpring(mouseX, { damping: 25, stiffness: 150 });
+  const smoothMouseY = useSpring(mouseY, { damping: 25, stiffness: 150 });
+  const backgroundX = useTransform(smoothMouseX, [-1, 1], ['-3%', '3%']);
+  const backgroundY = useTransform(smoothMouseY, [-1, 1], ['-3%', '3%']);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      const x = (e.clientX / window.innerWidth) * 2 - 1;
+      const y = (e.clientY / window.innerHeight) * 2 - 1;
+      mouseX.set(x);
+      mouseY.set(y);
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, [mouseX, mouseY]);
 
   // Encontrar el evento activo (el más cercano que ya haya pasado)
   const activeEvent = useMemo(() => {
@@ -125,10 +144,22 @@ export default function App() {
   const ActiveIcon = activeEvent.icon;
 
   return (
-    <div className="h-[100dvh] bg-slate-50 text-slate-800 font-sans flex flex-col overflow-hidden selection:bg-blue-200">
+    <div className="h-[100dvh] text-slate-800 font-sans flex flex-col overflow-hidden selection:bg-blue-200 relative bg-slate-950">
       
+      {/* Parallax Background */}
+      <motion.div 
+        className="absolute inset-[-5%] w-[110%] h-[110%] z-0 pointer-events-none"
+        style={{
+          backgroundImage: "url('https://images.unsplash.com/photo-1462331940025-496dfbfc7564?q=80&w=3000&auto=format&fit=crop')",
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          x: backgroundX,
+          y: backgroundY
+        }}
+      />
+
       {/* Header */}
-      <header className="py-2 px-4 bg-white border-b border-slate-200 shrink-0 z-10 shadow-sm flex items-center justify-between">
+      <header className="py-2 px-4 bg-white/85 backdrop-blur-md border-b border-white/20 shrink-0 z-10 shadow-sm flex items-center justify-between">
         <div className="text-left">
           <h1 className="text-lg md:text-xl font-extrabold tracking-tight bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent mb-0.5">
             Cronología de la Tierra
@@ -145,10 +176,10 @@ export default function App() {
       </header>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden z-10">
         
         {/* Planet Section */}
-        <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 shrink-0 lg:shrink bg-slate-100/50 border-b lg:border-b-0 lg:border-r border-slate-200 overflow-hidden relative">
+        <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 shrink-0 lg:shrink bg-black/20 backdrop-blur-sm border-b lg:border-b-0 lg:border-r border-white/10 overflow-hidden relative">
           
           {/* Contenedor Principal del Reloj */}
           <div className="relative w-full max-w-[320px] md:max-w-[450px] aspect-square flex items-center justify-center mt-4 lg:mt-0">
@@ -305,7 +336,7 @@ export default function App() {
 
         {/* Main: Registro Evolutivo (Compacto y Adaptable) */}
         <div 
-          className="h-48 lg:h-auto lg:w-80 shrink-0 bg-white border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col shadow-[0_-5px_20px_-15px_rgba(0,0,0,0.1)] lg:shadow-none z-10"
+          className="h-48 lg:h-auto lg:w-80 shrink-0 bg-white/85 backdrop-blur-md border-t lg:border-t-0 lg:border-l border-white/20 flex flex-col shadow-[0_-5px_20px_-15px_rgba(0,0,0,0.1)] lg:shadow-none z-10"
           onPointerDown={() => {
             wasPlayingRef.current = isPlaying;
             setIsPlaying(false);
@@ -320,7 +351,7 @@ export default function App() {
             if (wasPlayingRef.current && !isPlaying) setIsPlaying(true);
           }}
         >
-          <div className="p-2 md:p-3 border-b border-slate-100 bg-slate-50/80 backdrop-blur-sm shrink-0 flex items-center gap-2">
+          <div className="p-2 md:p-3 border-b border-slate-200/50 bg-white/50 backdrop-blur-sm shrink-0 flex items-center gap-2">
             <History size={14} className="text-blue-500" />
             <h3 className="font-bold text-slate-700 text-[11px] md:text-xs uppercase tracking-wider">
               Registro Evolutivo
@@ -339,12 +370,13 @@ export default function App() {
                 return (
                   <motion.div 
                     key={ev.title}
+                    onClick={() => setCurrentMa(ev.ma)}
                     initial={{ opacity: 0, y: 10, scale: 0.98 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
-                    className={`flex gap-2 p-2 md:p-3 rounded-xl border transition-all duration-300 ${
+                    className={`flex gap-2 p-2 md:p-3 rounded-xl border transition-all duration-300 cursor-pointer ${
                       isActive 
-                        ? 'bg-blue-50 border-blue-200 shadow-md ring-1 ring-blue-100' 
-                        : 'bg-white border-slate-100 opacity-60 hover:opacity-100'
+                        ? 'bg-blue-50/90 border-blue-300 shadow-md ring-1 ring-blue-200' 
+                        : 'bg-white/60 border-slate-200/60 opacity-70 hover:opacity-100 hover:bg-white/80'
                     }`}
                   >
                     <div className="mt-0.5 shrink-0">
@@ -383,7 +415,7 @@ export default function App() {
       </div>
 
       {/* Footer: Reproductor Muy Compacto */}
-      <footer className="bg-white border-t border-slate-200 p-2 md:p-3 shrink-0 z-20 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)]">
+      <footer className="bg-white/85 backdrop-blur-md border-t border-white/20 p-2 md:p-3 shrink-0 z-20 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)]">
         <div className="max-w-5xl mx-auto flex items-center gap-3 md:gap-6 px-2">
           
           <div className="flex items-center gap-1 md:gap-2 shrink-0">
