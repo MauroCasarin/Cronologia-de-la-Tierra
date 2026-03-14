@@ -16,7 +16,8 @@ import {
   Play,
   Pause,
   RotateCcw,
-  SkipBack
+  SkipBack,
+  Smartphone
 } from 'lucide-react';
 
 // --- DATOS DE LA CRONOLOGÍA ---
@@ -41,6 +42,7 @@ export default function App() {
   const [currentMa, setCurrentMa] = useState(MAX_MA);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [needsSensorPermission, setNeedsSensorPermission] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -59,15 +61,65 @@ export default function App() {
   const innerTextY = useTransform(smoothMouseY, [-1, 1], ['25px', '-25px']);
 
   useEffect(() => {
+    if (typeof (DeviceOrientationEvent as any) !== 'undefined' && typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
+      setNeedsSensorPermission(true);
+    }
+  }, []);
+
+  const requestSensorAccess = async () => {
+    if (typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
+      try {
+        const permissionState = await (DeviceOrientationEvent as any).requestPermission();
+        if (permissionState === 'granted') {
+          setNeedsSensorPermission(false);
+          // Re-attach the listener now that we have permission
+          const handleDeviceOrientation = (e: DeviceOrientationEvent) => {
+            if (e.gamma !== null && e.beta !== null) {
+              const x = Math.max(-1, Math.min(1, e.gamma / 45));
+              const y = Math.max(-1, Math.min(1, (e.beta - 45) / 45));
+              mouseX.set(x);
+              mouseY.set(y);
+            }
+          };
+          window.addEventListener('deviceorientation', handleDeviceOrientation);
+        }
+      } catch (error) {
+        console.error("Error requesting sensor access:", error);
+      }
+    }
+  };
+
+  useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       const x = (e.clientX / window.innerWidth) * 2 - 1;
       const y = (e.clientY / window.innerHeight) * 2 - 1;
       mouseX.set(x);
       mouseY.set(y);
     };
+
+    const handleDeviceOrientation = (e: DeviceOrientationEvent) => {
+      if (e.gamma !== null && e.beta !== null) {
+        // gamma: inclinación izquierda/derecha (-90 a 90). Limitamos de -45 a 45 para mayor sensibilidad.
+        const x = Math.max(-1, Math.min(1, e.gamma / 45));
+        // beta: inclinación adelante/atrás (-180 a 180). Restamos 45 para que sostenerlo a 45 grados sea el "centro" (0).
+        const y = Math.max(-1, Math.min(1, (e.beta - 45) / 45));
+        
+        mouseX.set(x);
+        mouseY.set(y);
+      }
+    };
+
     window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, [mouseX, mouseY]);
+    
+    if (!needsSensorPermission) {
+      window.addEventListener('deviceorientation', handleDeviceOrientation);
+    }
+    
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('deviceorientation', handleDeviceOrientation);
+    };
+  }, [mouseX, mouseY, needsSensorPermission]);
 
   // Encontrar el evento activo (el más cercano que ya haya pasado)
   const activeEvent = useMemo(() => {
@@ -173,7 +225,16 @@ export default function App() {
             Toda la historia de nuestro planeta en millones de años.
           </p>
         </div>
-        <div className="text-right shrink-0">
+        <div className="text-right shrink-0 flex items-center gap-2 md:gap-4">
+          {needsSensorPermission && (
+            <button 
+              onClick={requestSensorAccess}
+              className="animate-pulse bg-blue-500/20 text-blue-600 border border-blue-500/30 px-2 py-1 rounded-lg text-[10px] md:text-xs font-bold flex items-center gap-1 hover:bg-blue-500/30 transition-colors"
+            >
+              <Smartphone size={14} />
+              Activar 3D
+            </button>
+          )}
           <div className="text-xl md:text-2xl font-black font-mono tracking-tighter text-blue-600 bg-blue-50 px-3 py-1 rounded-lg border border-blue-100 shadow-sm">
             {Math.round(currentMa)} <span className="text-xs md:text-sm font-sans font-bold text-blue-400">Ma</span>
           </div>
