@@ -16,7 +16,7 @@ import {
   Play,
   Pause,
   RotateCcw,
-  SkipForward,
+  SkipBack,
   Smartphone
 } from 'lucide-react';
 
@@ -46,6 +46,7 @@ export default function App() {
   const svgRef = useRef<SVGSVGElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
+  // Parallax setup
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
   const smoothMouseX = useSpring(mouseX, { damping: 25, stiffness: 150 });
@@ -71,6 +72,16 @@ export default function App() {
         const permissionState = await (DeviceOrientationEvent as any).requestPermission();
         if (permissionState === 'granted') {
           setNeedsSensorPermission(false);
+          // Re-attach the listener now that we have permission
+          const handleDeviceOrientation = (e: DeviceOrientationEvent) => {
+            if (e.gamma !== null && e.beta !== null) {
+              const x = Math.max(-1, Math.min(1, e.gamma / 45));
+              const y = Math.max(-1, Math.min(1, (e.beta - 45) / 45));
+              mouseX.set(x);
+              mouseY.set(y);
+            }
+          };
+          window.addEventListener('deviceorientation', handleDeviceOrientation);
         }
       } catch (error) {
         console.error("Error requesting sensor access:", error);
@@ -88,14 +99,18 @@ export default function App() {
 
     const handleDeviceOrientation = (e: DeviceOrientationEvent) => {
       if (e.gamma !== null && e.beta !== null) {
+        // gamma: inclinación izquierda/derecha (-90 a 90). Limitamos de -45 a 45 para mayor sensibilidad.
         const x = Math.max(-1, Math.min(1, e.gamma / 45));
+        // beta: inclinación adelante/atrás (-180 a 180). Restamos 45 para que sostenerlo a 45 grados sea el "centro" (0).
         const y = Math.max(-1, Math.min(1, (e.beta - 45) / 45));
+        
         mouseX.set(x);
         mouseY.set(y);
       }
     };
 
     window.addEventListener('mousemove', handleMouseMove);
+    
     if (!needsSensorPermission) {
       window.addEventListener('deviceorientation', handleDeviceOrientation);
     }
@@ -106,10 +121,12 @@ export default function App() {
     };
   }, [mouseX, mouseY, needsSensorPermission]);
 
+  // Encontrar el evento activo (el más cercano que ya haya pasado)
   const activeEvent = useMemo(() => {
     return TIMELINE_EVENTS.slice().reverse().find(e => currentMa <= e.ma) || TIMELINE_EVENTS[0];
   }, [currentMa]);
 
+  // Auto-scroll list when active event changes
   useEffect(() => {
     if (listRef.current) {
       listRef.current.scrollTo({
@@ -119,6 +136,7 @@ export default function App() {
     }
   }, [activeEvent]);
 
+  // Lógica del reproductor
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (isPlaying) {
@@ -128,9 +146,10 @@ export default function App() {
             setIsPlaying(false);
             return 0;
           }
+          // Velocidad dinámica: más lento al acercarse al presente
           let speed = 8; 
-          if (prev <= 600) speed = 2; 
-          if (prev <= 15) speed = 0.08; 
+          if (prev <= 600) speed = 2; // Era de plantas y dinosaurios
+          if (prev <= 15) speed = 0.08; // Súper lento para ver al Primer Homo (2 Ma)
           return Math.max(0, prev - speed);
         });
       }, 50);
@@ -138,6 +157,42 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isPlaying]);
 
+  // Manejo del arrastre (Scrubbing) en el SVG circular
+  const handlePointerEvent = (e: React.PointerEvent<SVGSVGElement> | PointerEvent) => {
+    if (!isDragging || !svgRef.current) return;
+    
+    const rect = svgRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left - rect.width / 2;
+    const y = e.clientY - rect.top - rect.height / 2;
+    
+    // Calcular ángulo (0 en la parte superior, sentido horario)
+    let angle = Math.atan2(y, x) + Math.PI / 2;
+    if (angle < 0) angle += 2 * Math.PI;
+    
+    const fraction = angle / (2 * Math.PI);
+    const newMa = MAX_MA - (fraction * MAX_MA);
+    
+    setCurrentMa(Math.max(0, Math.min(MAX_MA, newMa)));
+  };
+
+  useEffect(() => {
+    const handleGlobalPointerUp = () => setIsDragging(false);
+    const handleGlobalPointerMove = (e: PointerEvent) => {
+      if (isDragging) handlePointerEvent(e);
+    };
+
+    if (isDragging) {
+      window.addEventListener('pointerup', handleGlobalPointerUp);
+      window.addEventListener('pointermove', handleGlobalPointerMove);
+    }
+
+    return () => {
+      window.removeEventListener('pointerup', handleGlobalPointerUp);
+      window.removeEventListener('pointermove', handleGlobalPointerMove);
+    };
+  }, [isDragging]);
+
+  // Progreso circular
   const progressFraction = (MAX_MA - currentMa) / MAX_MA;
   const radius = 42;
   const circumference = 2 * Math.PI * radius;
@@ -148,6 +203,7 @@ export default function App() {
   return (
     <div className="h-[100dvh] text-slate-800 font-sans flex flex-col overflow-hidden selection:bg-blue-200 relative bg-slate-950">
       
+      {/* Parallax Background */}
       <motion.div 
         className="absolute inset-[-5%] w-[110%] h-[110%] z-0 pointer-events-none"
         style={{
@@ -159,6 +215,7 @@ export default function App() {
         }}
       />
 
+      {/* Header */}
       <header className="py-2 px-4 bg-white/85 backdrop-blur-md border-b border-white/20 shrink-0 z-10 shadow-sm flex items-center justify-between">
         <div className="text-left">
           <h1 className="text-lg md:text-xl font-extrabold tracking-tight bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent mb-0.5">
@@ -184,110 +241,322 @@ export default function App() {
         </div>
       </header>
 
+      {/* Main Content Area */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden z-10">
+        
+        {/* Planet Section */}
         <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 shrink-0 lg:shrink bg-black/20 backdrop-blur-sm border-b lg:border-b-0 lg:border-r border-white/10 overflow-hidden relative">
+          
+          {/* Contenedor Principal del Reloj */}
           <div className="relative w-full max-w-[320px] md:max-w-[450px] aspect-square flex items-center justify-center mt-4 lg:mt-0">
+            
+            {/* SVG Circular Timeline */}
             <motion.svg 
               ref={svgRef}
               viewBox="0 0 100 100" 
               className="absolute inset-0 w-full h-full overflow-visible touch-none cursor-crosshair drop-shadow-xl z-10"
               style={{ x: clockX, y: clockY }}
+              onPointerDown={(e) => {
+                setIsDragging(true);
+                // Hack para que el primer clic también actualice
+                const rect = e.currentTarget.getBoundingClientRect();
+                const x = e.clientX - rect.left - rect.width / 2;
+                const y = e.clientY - rect.top - rect.height / 2;
+                let angle = Math.atan2(y, x) + Math.PI / 2;
+                if (angle < 0) angle += 2 * Math.PI;
+                const fraction = angle / (2 * Math.PI);
+                setCurrentMa(Math.max(0, Math.min(MAX_MA, MAX_MA - (fraction * MAX_MA))));
+              }}
             >
-              <circle cx="50" cy="50" r={radius} fill="none" stroke="#e2e8f0" strokeWidth="8" />
+              {/* Fondo del anillo */}
+              <circle 
+                cx="50" cy="50" r={radius} 
+                fill="none" 
+                stroke="#e2e8f0" 
+                strokeWidth="8" 
+              />
+              
+              {/* Anillo de progreso animado */}
               <motion.circle 
-                cx="50" cy="50" r={radius} fill="none" stroke="url(#gradient)" strokeWidth="8" strokeLinecap="round"
-                strokeDasharray={circumference} strokeDashoffset={strokeDashoffset}
+                cx="50" cy="50" r={radius} 
+                fill="none" 
+                stroke="url(#gradient)" 
+                strokeWidth="8"
+                strokeLinecap="round"
+                strokeDasharray={circumference}
+                strokeDashoffset={strokeDashoffset}
+                className="transition-none"
                 style={{ transformOrigin: '50% 50%', rotate: '-90deg' }}
               />
+
+              {/* Gradiente para el anillo */}
               <defs>
                 <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
                   <stop offset="0%" stopColor="#0ea5e9" />
                   <stop offset="100%" stopColor="#3b82f6" />
                 </linearGradient>
+                <filter id="textShadow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feDropShadow dx="0" dy="1" stdDeviation="1" floodColor="#000000" floodOpacity="0.6"/>
+                </filter>
               </defs>
+
+              {/* Marcadores de eventos */}
+              {TIMELINE_EVENTS.map((ev, i) => {
+                if (ev.ma === 0) return null; // Omitir el presente en los marcadores
+                const frac = (MAX_MA - ev.ma) / MAX_MA;
+                const angle = frac * 2 * Math.PI - Math.PI / 2;
+                const x = 50 + Math.cos(angle) * radius;
+                const y = 50 + Math.sin(angle) * radius;
+                const isPassed = currentMa <= ev.ma;
+                const isActive = activeEvent.title === ev.title;
+
+                return (
+                  <g key={i}>
+                    <circle 
+                      cx={x} cy={y} r="1.5" 
+                      fill={isPassed ? '#ffffff' : '#cbd5e1'} 
+                      className="transition-colors duration-500"
+                    />
+                    <AnimatePresence>
+                      {isActive && (
+                        <motion.text
+                          initial={{ opacity: 0, scale: 0.5 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.5 }}
+                          x={50 + Math.cos(angle) * (radius + 8)}
+                          y={50 + Math.sin(angle) * (radius + 8)}
+                          fill={ev.color}
+                          fontSize="5"
+                          fontWeight="900"
+                          textAnchor="middle"
+                          alignmentBaseline="middle"
+                          className="pointer-events-none"
+                          filter="url(#textShadow)"
+                        >
+                          {ev.ma}
+                        </motion.text>
+                      )}
+                    </AnimatePresence>
+                  </g>
+                );
+              })}
             </motion.svg>
 
+            {/* Contenido Central (Planeta 3D y Evento Activo) */}
             <motion.div 
-              className="absolute inset-0 m-auto w-[70%] h-[70%] rounded-full flex flex-col items-center justify-center p-4 text-center text-white overflow-hidden shadow-2xl"
+              className="absolute inset-0 m-auto w-[70%] h-[70%] rounded-full flex flex-col items-center justify-center p-4 text-center text-white overflow-hidden shadow-2xl transition-colors duration-1000"
               style={{
                 background: `radial-gradient(circle at 30% 30%, ${activeEvent.color} 0%, #1e3a8a 60%, #0f172a 100%)`,
-                x: planetX, y: planetY
+                boxShadow: `inset -15px -15px 25px rgba(0,0,0,0.6), inset 5px 5px 15px rgba(255,255,255,0.2), 0 10px 30px rgba(0,0,0,0.15)`,
+                x: planetX,
+                y: planetY
               }}
+              animate={{ rotate: [-1.5, 1.5, -1.5] }}
+              transition={{ rotate: { repeat: Infinity, duration: 8, ease: "easeInOut" } }}
             >
+              {/* Textura animada del planeta (Superficie) */}
+              <motion.div 
+                className="absolute inset-0 opacity-30 mix-blend-overlay"
+                style={{
+                  backgroundImage: "url('https://www.transparenttextures.com/patterns/stardust.png')",
+                  backgroundSize: "200px 200px"
+                }}
+                animate={{ backgroundPositionX: ["0px", "200px"], backgroundPositionY: ["0px", "20px"] }}
+                transition={{ repeat: Infinity, duration: 20, ease: "linear" }}
+              />
+              
+              {/* Segunda capa de textura (Atmósfera/Nubes) para efecto Parallax */}
+              <motion.div 
+                className="absolute inset-0 opacity-20 mix-blend-screen"
+                style={{
+                  backgroundImage: "url('https://www.transparenttextures.com/patterns/stardust.png')",
+                  backgroundSize: "300px 300px"
+                }}
+                animate={{ backgroundPositionX: ["0px", "-300px"], rotate: [0, 360] }}
+                transition={{ 
+                  backgroundPositionX: { repeat: Infinity, duration: 30, ease: "linear" },
+                  rotate: { repeat: Infinity, duration: 150, ease: "linear" }
+                }}
+              />
+
               <AnimatePresence mode="wait">
-                <motion.div key={activeEvent.title} className="relative z-10 flex flex-col items-center" style={{ x: innerTextX, y: innerTextY }}>
-                  <div className="w-10 h-10 md:w-14 md:h-14 rounded-full flex items-center justify-center mb-2 shadow-lg" style={{ backgroundColor: `${activeEvent.color}30`, color: activeEvent.color }}>
+                <motion.div
+                  key={activeEvent.title}
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 1.1 }}
+                  transition={{ duration: 0.3 }}
+                  className="relative z-10 flex flex-col items-center"
+                  style={{ x: innerTextX, y: innerTextY }}
+                >
+                  <div 
+                    className="w-10 h-10 md:w-14 md:h-14 rounded-full flex items-center justify-center mb-2 shadow-lg"
+                    style={{ backgroundColor: `${activeEvent.color}30`, color: activeEvent.color }}
+                  >
                     <ActiveIcon size={24} strokeWidth={2.5} />
                   </div>
-                  <h2 className="font-bold text-sm md:text-xl mb-1 leading-tight drop-shadow-md px-2">{activeEvent.title}</h2>
+                  <h2 className="font-bold text-sm md:text-xl mb-1 leading-tight drop-shadow-md px-2">
+                    {activeEvent.title}
+                  </h2>
                 </motion.div>
               </AnimatePresence>
             </motion.div>
           </div>
         </div>
 
-        <div className="h-48 lg:h-auto lg:w-80 shrink-0 bg-white/85 backdrop-blur-md border-t lg:border-t-0 lg:border-l border-white/20 flex flex-col shadow-none z-10 overflow-hidden">
-          <div className="p-2 md:p-3 border-b border-slate-200/50 bg-white/50 backdrop-blur-sm shrink-0 flex items-center gap-2">
-            <History size={14} className="text-blue-500" />
-            <h3 className="font-bold text-slate-700 text-[11px] md:text-xs uppercase tracking-wider">Registro Evolutivo</h3>
+        {/* Main: Registro Evolutivo (Compacto y Adaptable) */}
+        <div 
+          className="h-48 lg:h-auto lg:w-80 shrink-0 bg-white/85 backdrop-blur-md border-t lg:border-t-0 lg:border-l border-white/20 flex flex-col shadow-[0_-5px_20px_-15px_rgba(0,0,0,0.1)] lg:shadow-none z-10 cursor-pointer"
+          onClick={() => setIsPlaying(false)}
+          onDoubleClick={() => setIsPlaying(true)}
+          title="1 clic: Pausa | 2 clics: Play"
+        >
+          <div className="p-2 md:p-3 border-b border-slate-200/50 bg-white/50 backdrop-blur-sm shrink-0 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <History size={14} className="text-blue-500" />
+              <h3 className="font-bold text-slate-700 text-[11px] md:text-xs uppercase tracking-wider">
+                Registro Evolutivo
+              </h3>
+            </div>
+            <span className="text-[8px] md:text-[9px] text-slate-400 font-medium px-2 py-0.5 bg-white/50 rounded-full border border-slate-200/50">
+              1 clic: Pausa | 2: Play
+            </span>
           </div>
+          
           <div ref={listRef} className="flex-1 overflow-y-auto p-2 space-y-2 scroll-smooth">
-            {TIMELINE_EVENTS.map((ev) => {
-              const isPast = ev.ma >= currentMa;
-              const isActive = activeEvent.title === ev.title;
-              if (!isPast) return null;
-              const Icon = ev.icon;
-              return (
-                <div key={ev.title} className={`flex gap-2 p-2 md:p-3 rounded-xl border ${isActive ? 'bg-blue-50 border-blue-300' : 'bg-white border-slate-200'}`}>
-                  <div className="mt-0.5 shrink-0"><div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: `${ev.color}20`, color: ev.color }}><Icon size={16} /></div></div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex justify-between items-baseline gap-1 mb-1">
-                      <h4 className="font-bold text-slate-800 text-xs truncate">{ev.title}</h4>
-                      <span className="text-[10px] font-mono font-bold text-blue-600">{ev.ma} Ma</span>
+            <AnimatePresence initial={false}>
+              {TIMELINE_EVENTS.map((ev) => {
+                const isPast = ev.ma >= currentMa;
+                const isActive = activeEvent.title === ev.title;
+                
+                if (!isPast) return null;
+
+                const Icon = ev.icon;
+                return (
+                  <motion.div 
+                    key={ev.title}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCurrentMa(ev.ma);
+                      setIsPlaying(false);
+                    }}
+                    initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    className={`flex gap-2 p-2 md:p-3 rounded-xl border transition-all duration-300 cursor-pointer ${
+                      isActive 
+                        ? 'bg-blue-50/90 border-blue-300 shadow-md ring-1 ring-blue-200' 
+                        : 'bg-white/60 border-slate-200/60 opacity-70 hover:opacity-100 hover:bg-white/80'
+                    }`}
+                  >
+                    <div className="mt-0.5 shrink-0">
+                      <div 
+                        className={`w-8 h-8 rounded-full flex items-center justify-center ${isActive ? 'animate-pulse' : ''}`}
+                        style={{ backgroundColor: `${ev.color}20`, color: ev.color }}
+                      >
+                        <Icon size={16} strokeWidth={2.5} />
+                      </div>
                     </div>
-                    {isActive && <p className="text-xs text-slate-700 leading-relaxed">{ev.longDescription}</p>}
-                  </div>
-                </div>
-              );
-            })}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex justify-between items-baseline gap-1 mb-1">
+                        <h4 className={`font-bold text-slate-800 leading-tight truncate ${isActive ? 'text-sm md:text-base' : 'text-xs'}`}>{ev.title}</h4>
+                        <span className="text-[10px] font-mono font-bold text-blue-600 shrink-0">{ev.ma} Ma</span>
+                      </div>
+                      {isActive ? (
+                        <motion.p 
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          className="text-xs md:text-sm text-slate-700 leading-relaxed"
+                        >
+                          {ev.longDescription}
+                        </motion.p>
+                      ) : (
+                        <p className="text-[10px] text-slate-500 leading-tight line-clamp-1">
+                          {ev.description}
+                        </p>
+                      )}
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
           </div>
         </div>
       </div>
 
-      <footer className="bg-white/85 backdrop-blur-md border-t border-white/20 p-2 md:p-3 shrink-0 z-20">
+      {/* Footer: Reproductor Muy Compacto */}
+      <footer className="bg-white/85 backdrop-blur-md border-t border-white/20 p-2 md:p-3 shrink-0 z-20 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)]">
         <div className="max-w-5xl mx-auto flex items-center gap-3 md:gap-6 px-2">
+          
           <div className="flex items-center gap-1 md:gap-2 shrink-0">
-            {/* BOTÓN MODIFICADO: Flecha derecha y lógica de avance */}
             <button 
               onClick={() => {
                 const currentIndex = TIMELINE_EVENTS.findIndex(e => e.title === activeEvent.title);
-                if (currentIndex > 0) {
-                  setCurrentMa(TIMELINE_EVENTS[currentIndex - 1].ma);
+                if (currentIndex < TIMELINE_EVENTS.length - 1) {
+                  setCurrentMa(TIMELINE_EVENTS[currentIndex + 1].ma);
                 } else {
-                  setCurrentMa(0);
+                  setCurrentMa(MAX_MA);
                 }
               }}
               className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
-              title="Avanzar al siguiente evento"
+              title="Volver al evento anterior"
             >
-              <SkipForward size={14} />
+              <SkipBack size={14} />
             </button>
-
-            <button onClick={() => { setCurrentMa(MAX_MA); setIsPlaying(false); }} className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600" title="Reiniciar">
+            <button 
+              onClick={() => {
+                setCurrentMa(MAX_MA);
+                setIsPlaying(false);
+              }}
+              className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
+              title="Reiniciar desde el principio"
+            >
               <RotateCcw size={14} />
             </button>
-            <button onClick={() => setIsPlaying(!isPlaying)} className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center rounded-full bg-blue-600 text-white shadow-md ml-1">
+            
+            <button 
+              onClick={() => setIsPlaying(!isPlaying)}
+              className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-md transition-transform active:scale-95 ml-1"
+            >
               {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="ml-0.5" />}
             </button>
           </div>
           
-          <div className="flex-1 relative flex items-center h-6">
-            <input type="range" min="0" max={MAX_MA} step="1" value={MAX_MA - currentMa} onChange={(e) => { setCurrentMa(MAX_MA - Number(e.target.value)); setIsPlaying(false); }} className="w-full h-1.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-blue-600" />
+          <div className="flex-1 relative flex items-center h-6 group">
+            <input 
+              type="range" 
+              min="0" 
+              max={MAX_MA} 
+              step="1"
+              value={MAX_MA - currentMa}
+              onChange={(e) => {
+                setCurrentMa(MAX_MA - Number(e.target.value));
+                setIsPlaying(false);
+              }}
+              className="w-full h-1.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-blue-600 relative z-10"
+            />
+            {/* Marcadores de eventos en el slider */}
+            <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1.5 pointer-events-none px-[4px]">
+              {TIMELINE_EVENTS.map((ev, i) => {
+                if (ev.ma === 0) return null;
+                const fraction = (MAX_MA - ev.ma) / MAX_MA;
+                const isPassed = currentMa <= ev.ma;
+                return (
+                  <div 
+                    key={i}
+                    className={`absolute w-1 h-1 rounded-full top-1/2 -translate-y-1/2 -translate-x-1/2 transition-colors duration-300 ${isPassed ? 'bg-white shadow-sm' : 'bg-slate-400'}`}
+                    style={{ left: `${fraction * 100}%`, backgroundColor: isPassed ? ev.color : undefined }}
+                  />
+                );
+              })}
+            </div>
           </div>
 
           <div className="text-right shrink-0 min-w-[60px]">
-            <div className="text-sm md:text-base font-black font-mono text-blue-600">{Math.round(currentMa)} <span className="text-[9px] md:text-[10px] text-blue-400 font-sans font-bold">Ma</span></div>
+            <div className="text-sm md:text-base font-black font-mono text-blue-600 tracking-tighter">
+              {Math.round(currentMa)} <span className="text-[9px] md:text-[10px] text-blue-400 font-sans font-bold">Ma</span>
+            </div>
           </div>
+
         </div>
       </footer>
     </div>
