@@ -500,7 +500,7 @@ export default function App() {
               className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
               title="Volver al evento anterior"
             >
-              <SkipForward size={14} />
+              <SkipBack size={14} />
             </button>
             <button 
               onClick={() => {
