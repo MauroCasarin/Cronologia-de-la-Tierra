@@ -17,7 +17,6 @@ import {
   Pause,
   RotateCcw,
   SkipBack,
-  SkipForward,
   Smartphone
 } from 'lucide-react';
 
@@ -73,6 +72,7 @@ export default function App() {
         const permissionState = await (DeviceOrientationEvent as any).requestPermission();
         if (permissionState === 'granted') {
           setNeedsSensorPermission(false);
+          // Re-attach the listener now that we have permission
           const handleDeviceOrientation = (e: DeviceOrientationEvent) => {
             if (e.gamma !== null && e.beta !== null) {
               const x = Math.max(-1, Math.min(1, e.gamma / 45));
@@ -99,8 +99,11 @@ export default function App() {
 
     const handleDeviceOrientation = (e: DeviceOrientationEvent) => {
       if (e.gamma !== null && e.beta !== null) {
+        // gamma: inclinación izquierda/derecha (-90 a 90). Limitamos de -45 a 45 para mayor sensibilidad.
         const x = Math.max(-1, Math.min(1, e.gamma / 45));
+        // beta: inclinación adelante/atrás (-180 a 180). Restamos 45 para que sostenerlo a 45 grados sea el "centro" (0).
         const y = Math.max(-1, Math.min(1, (e.beta - 45) / 45));
+        
         mouseX.set(x);
         mouseY.set(y);
       }
@@ -118,10 +121,12 @@ export default function App() {
     };
   }, [mouseX, mouseY, needsSensorPermission]);
 
+  // Encontrar el evento activo (el más cercano que ya haya pasado)
   const activeEvent = useMemo(() => {
     return TIMELINE_EVENTS.slice().reverse().find(e => currentMa <= e.ma) || TIMELINE_EVENTS[0];
   }, [currentMa]);
 
+  // Auto-scroll list when active event changes
   useEffect(() => {
     if (listRef.current) {
       listRef.current.scrollTo({
@@ -131,6 +136,7 @@ export default function App() {
     }
   }, [activeEvent]);
 
+  // Lógica del reproductor
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (isPlaying) {
@@ -140,9 +146,10 @@ export default function App() {
             setIsPlaying(false);
             return 0;
           }
+          // Velocidad dinámica: más lento al acercarse al presente
           let speed = 8; 
-          if (prev <= 600) speed = 2; 
-          if (prev <= 15) speed = 0.08; 
+          if (prev <= 600) speed = 2; // Era de plantas y dinosaurios
+          if (prev <= 15) speed = 0.08; // Súper lento para ver al Primer Homo (2 Ma)
           return Math.max(0, prev - speed);
         });
       }, 50);
@@ -150,6 +157,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isPlaying]);
 
+  // Manejo del arrastre (Scrubbing) en el SVG circular
   const handlePointerEvent = (e: React.PointerEvent<SVGSVGElement> | PointerEvent) => {
     if (!isDragging || !svgRef.current) return;
     
@@ -157,6 +165,7 @@ export default function App() {
     const x = e.clientX - rect.left - rect.width / 2;
     const y = e.clientY - rect.top - rect.height / 2;
     
+    // Calcular ángulo (0 en la parte superior, sentido horario)
     let angle = Math.atan2(y, x) + Math.PI / 2;
     if (angle < 0) angle += 2 * Math.PI;
     
@@ -183,6 +192,7 @@ export default function App() {
     };
   }, [isDragging]);
 
+  // Progreso circular
   const progressFraction = (MAX_MA - currentMa) / MAX_MA;
   const radius = 42;
   const circumference = 2 * Math.PI * radius;
@@ -193,6 +203,7 @@ export default function App() {
   return (
     <div className="h-[100dvh] text-slate-800 font-sans flex flex-col overflow-hidden selection:bg-blue-200 relative bg-slate-950">
       
+      {/* Parallax Background */}
       <motion.div 
         className="absolute inset-[-5%] w-[110%] h-[110%] z-0 pointer-events-none"
         style={{
@@ -204,6 +215,7 @@ export default function App() {
         }}
       />
 
+      {/* Header */}
       <header className="py-2 px-4 bg-white/85 backdrop-blur-md border-b border-white/20 shrink-0 z-10 shadow-sm flex items-center justify-between">
         <div className="text-left">
           <h1 className="text-lg md:text-xl font-extrabold tracking-tight bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent mb-0.5">
@@ -229,12 +241,16 @@ export default function App() {
         </div>
       </header>
 
+      {/* Main Content Area */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden z-10">
         
+        {/* Planet Section */}
         <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 shrink-0 lg:shrink bg-black/20 backdrop-blur-sm border-b lg:border-b-0 lg:border-r border-white/10 overflow-hidden relative">
           
+          {/* Contenedor Principal del Reloj */}
           <div className="relative w-full max-w-[320px] md:max-w-[450px] aspect-square flex items-center justify-center mt-4 lg:mt-0">
             
+            {/* SVG Circular Timeline */}
             <motion.svg 
               ref={svgRef}
               viewBox="0 0 100 100" 
@@ -242,6 +258,7 @@ export default function App() {
               style={{ x: clockX, y: clockY }}
               onPointerDown={(e) => {
                 setIsDragging(true);
+                // Hack para que el primer clic también actualice
                 const rect = e.currentTarget.getBoundingClientRect();
                 const x = e.clientX - rect.left - rect.width / 2;
                 const y = e.clientY - rect.top - rect.height / 2;
@@ -251,6 +268,7 @@ export default function App() {
                 setCurrentMa(Math.max(0, Math.min(MAX_MA, MAX_MA - (fraction * MAX_MA))));
               }}
             >
+              {/* Fondo del anillo */}
               <circle 
                 cx="50" cy="50" r={radius} 
                 fill="none" 
@@ -258,6 +276,7 @@ export default function App() {
                 strokeWidth="8" 
               />
               
+              {/* Anillo de progreso animado */}
               <motion.circle 
                 cx="50" cy="50" r={radius} 
                 fill="none" 
@@ -270,6 +289,7 @@ export default function App() {
                 style={{ transformOrigin: '50% 50%', rotate: '-90deg' }}
               />
 
+              {/* Gradiente para el anillo */}
               <defs>
                 <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
                   <stop offset="0%" stopColor="#0ea5e9" />
@@ -280,8 +300,9 @@ export default function App() {
                 </filter>
               </defs>
 
+              {/* Marcadores de eventos */}
               {TIMELINE_EVENTS.map((ev, i) => {
-                if (ev.ma === 0) return null;
+                if (ev.ma === 0) return null; // Omitir el presente en los marcadores
                 const frac = (MAX_MA - ev.ma) / MAX_MA;
                 const angle = frac * 2 * Math.PI - Math.PI / 2;
                 const x = 50 + Math.cos(angle) * radius;
@@ -321,6 +342,7 @@ export default function App() {
               })}
             </motion.svg>
 
+            {/* Contenido Central (Planeta 3D y Evento Activo) */}
             <motion.div 
               className="absolute inset-0 m-auto w-[70%] h-[70%] rounded-full flex flex-col items-center justify-center p-4 text-center text-white overflow-hidden shadow-2xl transition-colors duration-1000"
               style={{
@@ -332,6 +354,7 @@ export default function App() {
               animate={{ rotate: [-1.5, 1.5, -1.5] }}
               transition={{ rotate: { repeat: Infinity, duration: 8, ease: "easeInOut" } }}
             >
+              {/* Textura animada del planeta (Superficie) */}
               <motion.div 
                 className="absolute inset-0 opacity-30 mix-blend-overlay"
                 style={{
@@ -342,6 +365,7 @@ export default function App() {
                 transition={{ repeat: Infinity, duration: 20, ease: "linear" }}
               />
               
+              {/* Segunda capa de textura (Atmósfera/Nubes) para efecto Parallax */}
               <motion.div 
                 className="absolute inset-0 opacity-20 mix-blend-screen"
                 style={{
@@ -380,6 +404,7 @@ export default function App() {
           </div>
         </div>
 
+        {/* Main: Registro Evolutivo (Compacto y Adaptable) */}
         <div 
           className="h-48 lg:h-auto lg:w-80 shrink-0 bg-white/85 backdrop-blur-md border-t lg:border-t-0 lg:border-l border-white/20 flex flex-col shadow-[0_-5px_20px_-15px_rgba(0,0,0,0.1)] lg:shadow-none z-10 cursor-pointer"
           onClick={() => setIsPlaying(false)}
@@ -458,24 +483,24 @@ export default function App() {
         </div>
       </div>
 
+      {/* Footer: Reproductor Muy Compacto */}
       <footer className="bg-white/85 backdrop-blur-md border-t border-white/20 p-2 md:p-3 shrink-0 z-20 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)]">
         <div className="max-w-5xl mx-auto flex items-center gap-3 md:gap-6 px-2">
           
           <div className="flex items-center gap-1 md:gap-2 shrink-0">
             <button 
               onClick={() => {
-                // Lógica de avance: busca el índice anterior en el array (hacia el presente)
                 const currentIndex = TIMELINE_EVENTS.findIndex(e => e.title === activeEvent.title);
-                if (currentIndex > 0) {
-                  setCurrentMa(TIMELINE_EVENTS[currentIndex - 1].ma);
+                if (currentIndex < TIMELINE_EVENTS.length - 1) {
+                  setCurrentMa(TIMELINE_EVENTS[currentIndex + 1].ma);
                 } else {
-                  setCurrentMa(0);
+                  setCurrentMa(MAX_MA);
                 }
               }}
               className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
-              title="Ir al siguiente evento"
+              title="Volver al evento anterior"
             >
-              <SkipForward size={14} />
+              <SkipBack size={14} />
             </button>
             <button 
               onClick={() => {
@@ -509,6 +534,7 @@ export default function App() {
               }}
               className="w-full h-1.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-blue-600 relative z-10"
             />
+            {/* Marcadores de eventos en el slider */}
             <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1.5 pointer-events-none px-[4px]">
               {TIMELINE_EVENTS.map((ev, i) => {
                 if (ev.ma === 0) return null;
