@@ -38,6 +38,43 @@ const TIMELINE_EVENTS = [
 
 const MAX_MA = 4600;
 
+const Stars = () => {
+  const stars = useMemo(() => {
+    return Array.from({ length: 200 }).map((_, i) => ({
+      id: i,
+      left: Math.random() * 100 + '%',
+      top: Math.random() * 100 + '%',
+      size: Math.random() * 2.5 + 1,
+      opacity: Math.random() * 0.8 + 0.2,
+      isTwinkling: Math.random() > 0.5,
+      animationDelay: `${Math.random() * 5}s`,
+      animationDuration: `${Math.random() * 3 + 2}s`
+    }));
+  }, []);
+
+  return (
+    <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none">
+      {stars.map(star => (
+        <div 
+          key={star.id} 
+          className={`absolute rounded-full bg-white ${star.isTwinkling ? "animate-pulse" : ""}`}
+          style={{
+            left: star.left,
+            top: star.top,
+            width: `${star.size}px`,
+            height: `${star.size}px`,
+            opacity: star.opacity,
+            ...(star.isTwinkling ? {
+              animationDelay: star.animationDelay,
+              animationDuration: star.animationDuration
+            } : {})
+          }}
+        />
+      ))}
+    </div>
+  );
+};
+
 export default function App() {
   const [currentMa, setCurrentMa] = useState(MAX_MA);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -226,16 +263,15 @@ export default function App() {
         style={{
           backgroundColor: '#020617',
           backgroundImage: `
-            url("data:image/svg+xml,%3Csvg width='200' height='200' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='20' cy='30' r='1' fill='%23ffffff' opacity='0.8'/%3E%3Ccircle cx='80' cy='120' r='1.5' fill='%23ffffff' opacity='0.6'/%3E%3Ccircle cx='150' cy='60' r='0.5' fill='%23ffffff' opacity='0.9'/%3E%3Ccircle cx='110' cy='180' r='1' fill='%23ffffff' opacity='0.5'/%3E%3C/svg%3E"),
-            url("data:image/svg+xml,%3Csvg width='300' height='300' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='50' cy='150' r='1' fill='%23ffffff' opacity='0.7'/%3E%3Ccircle cx='220' cy='80' r='1.5' fill='%23ffffff' opacity='0.5'/%3E%3Ccircle cx='180' cy='250' r='0.5' fill='%23ffffff' opacity='0.8'/%3E%3Ccircle cx='280' cy='40' r='2' fill='%23ffffff' opacity='0.3'/%3E%3C/svg%3E"),
             radial-gradient(circle at 15% 50%, rgba(255, 255, 255, 0.04) 0%, transparent 50%),
             radial-gradient(circle at 85% 30%, rgba(56, 189, 248, 0.04) 0%, transparent 50%)
           `,
-          backgroundSize: '200px 200px, 300px 300px, 100% 100%, 100% 100%',
           x: backgroundX,
           y: backgroundY
         }}
-      />
+      >
+        <Stars />
+      </motion.div>
 
       {/* Header */}
       <header className="py-2 px-4 bg-white/85 backdrop-blur-md border-b border-white/20 shrink-0 z-10 shadow-sm flex items-center justify-between">
