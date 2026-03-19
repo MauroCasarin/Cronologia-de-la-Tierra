@@ -16,7 +16,7 @@ import {
   Play,
   Pause,
   RotateCcw,
-  SkipBack,
+  SkipForward,
   Smartphone
 } from 'lucide-react';
 
@@ -51,14 +51,14 @@ export default function App() {
   const mouseY = useMotionValue(0);
   const smoothMouseX = useSpring(mouseX, { damping: 25, stiffness: 150 });
   const smoothMouseY = useSpring(mouseY, { damping: 25, stiffness: 150 });
-  const backgroundX = useTransform(smoothMouseX, [-1, 1], ['-3%', '3%']);
-  const backgroundY = useTransform(smoothMouseY, [-1, 1], ['-3%', '3%']);
-  const planetX = useTransform(smoothMouseX, [-1, 1], ['15px', '-15px']);
-  const planetY = useTransform(smoothMouseY, [-1, 1], ['15px', '-15px']);
-  const clockX = useTransform(smoothMouseX, [-1, 1], ['5px', '-5px']);
-  const clockY = useTransform(smoothMouseY, [-1, 1], ['5px', '-5px']);
-  const innerTextX = useTransform(smoothMouseX, [-1, 1], ['25px', '-25px']);
-  const innerTextY = useTransform(smoothMouseY, [-1, 1], ['25px', '-25px']);
+  const backgroundX = useTransform(smoothMouseX, [-1, 1], ['3%', '-3%']);
+  const backgroundY = useTransform(smoothMouseY, [-1, 1], ['3%', '-3%']);
+  const planetX = useTransform(smoothMouseX, [-1, 1], ['-15px', '15px']);
+  const planetY = useTransform(smoothMouseY, [-1, 1], ['-15px', '15px']);
+  const clockX = useTransform(smoothMouseX, [-1, 1], ['-5px', '5px']);
+  const clockY = useTransform(smoothMouseY, [-1, 1], ['-5px', '5px']);
+  const innerTextX = useTransform(smoothMouseX, [-1, 1], ['-25px', '25px']);
+  const innerTextY = useTransform(smoothMouseY, [-1, 1], ['-25px', '25px']);
 
   useEffect(() => {
     if (typeof (DeviceOrientationEvent as any) !== 'undefined' && typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
@@ -91,6 +91,7 @@ export default function App() {
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
+      if (isPlaying || isDragging) return;
       const x = (e.clientX / window.innerWidth) * 2 - 1;
       const y = (e.clientY / window.innerHeight) * 2 - 1;
       mouseX.set(x);
@@ -98,6 +99,7 @@ export default function App() {
     };
 
     const handleDeviceOrientation = (e: DeviceOrientationEvent) => {
+      if (isPlaying || isDragging) return;
       if (e.gamma !== null && e.beta !== null) {
         // gamma: inclinación izquierda/derecha (-90 a 90). Limitamos de -45 a 45 para mayor sensibilidad.
         const x = Math.max(-1, Math.min(1, e.gamma / 45));
@@ -119,7 +121,22 @@ export default function App() {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('deviceorientation', handleDeviceOrientation);
     };
-  }, [mouseX, mouseY, needsSensorPermission]);
+  }, [mouseX, mouseY, needsSensorPermission, isPlaying, isDragging]);
+
+  // Efecto para que el parallax siga al reloj cuando está en "play" o arrastrando
+  useEffect(() => {
+    if (isPlaying || isDragging) {
+      const fraction = (MAX_MA - currentMa) / MAX_MA;
+      const angle = fraction * 2 * Math.PI;
+      // Seno para X y -Coseno para Y hace que empiece arriba (0, -1) y gire en sentido horario
+      const x = Math.sin(angle);
+      const y = -Math.cos(angle);
+      
+      // Multiplicamos por 0.8 para que el efecto no sea tan exagerado
+      mouseX.set(x * 0.8);
+      mouseY.set(y * 0.8);
+    }
+  }, [currentMa, isPlaying, isDragging, mouseX, mouseY]);
 
   // Encontrar el evento activo (el más cercano que ya haya pasado)
   const activeEvent = useMemo(() => {
@@ -207,9 +224,14 @@ export default function App() {
       <motion.div 
         className="absolute inset-[-5%] w-[110%] h-[110%] z-0 pointer-events-none"
         style={{
-          backgroundImage: "url('https://images.unsplash.com/photo-1462331940025-496dfbfc7564?q=80&w=3000&auto=format&fit=crop')",
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
+          backgroundColor: '#020617',
+          backgroundImage: `
+            url("data:image/svg+xml,%3Csvg width='200' height='200' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='20' cy='30' r='1' fill='%23ffffff' opacity='0.8'/%3E%3Ccircle cx='80' cy='120' r='1.5' fill='%23ffffff' opacity='0.6'/%3E%3Ccircle cx='150' cy='60' r='0.5' fill='%23ffffff' opacity='0.9'/%3E%3Ccircle cx='110' cy='180' r='1' fill='%23ffffff' opacity='0.5'/%3E%3C/svg%3E"),
+            url("data:image/svg+xml,%3Csvg width='300' height='300' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='50' cy='150' r='1' fill='%23ffffff' opacity='0.7'/%3E%3Ccircle cx='220' cy='80' r='1.5' fill='%23ffffff' opacity='0.5'/%3E%3Ccircle cx='180' cy='250' r='0.5' fill='%23ffffff' opacity='0.8'/%3E%3Ccircle cx='280' cy='40' r='2' fill='%23ffffff' opacity='0.3'/%3E%3C/svg%3E"),
+            radial-gradient(circle at 15% 50%, rgba(255, 255, 255, 0.04) 0%, transparent 50%),
+            radial-gradient(circle at 85% 30%, rgba(56, 189, 248, 0.04) 0%, transparent 50%)
+          `,
+          backgroundSize: '200px 200px, 300px 300px, 100% 100%, 100% 100%',
           x: backgroundX,
           y: backgroundY
         }}
@@ -498,9 +520,9 @@ export default function App() {
                 }
               }}
               className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
-              title="Volver al evento anterior"
+              title="Continuar al siguiente evento"
             >
-              <SkipBack size={14} />
+              <SkipForward size={14} />
             </button>
             <button 
               onClick={() => {
