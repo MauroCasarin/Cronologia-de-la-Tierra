@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'motion/react';
 import { 
   Globe, 
@@ -695,6 +696,7 @@ export default function App() {
 
         </div>
       </footer>
+      <Analytics />
     </div>
   );
 }
