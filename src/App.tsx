@@ -80,8 +80,46 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [needsSensorPermission, setNeedsSensorPermission] = useState(false);
+  const [visits, setVisits] = useState<number | string>("...");
   const svgRef = useRef<SVGSVGElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Intentamos usar tu Vercel KV real si las variables están configuradas
+    const kvUrl = import.meta.env.VITE_KV_REST_API_URL;
+    const kvToken = import.meta.env.VITE_KV_REST_API_TOKEN;
+
+    if (kvUrl && kvToken) {
+      // Usar Vercel KV (incrementa la clave 'cronologia_visits' en 1)
+      fetch(`${kvUrl}/incr/cronologia_visits`, {
+        headers: {
+          Authorization: `Bearer ${kvToken}`,
+        },
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.result) {
+            setVisits(data.result);
+          }
+        })
+        .catch(err => {
+          console.error("Error conectando a Vercel KV:", err);
+          setVisits("?");
+        });
+    } else {
+      // Fallback al servicio gratuito si no están las variables de Vercel
+      fetch('https://api.counterapi.dev/v1/cronologia-de-la-tierra/visits/up')
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.count) setVisits(data.count);
+        })
+        .catch(() => {
+          const localVisits = parseInt(localStorage.getItem('vers_count') || '0') + 1;
+          localStorage.setItem('vers_count', localVisits.toString());
+          setVisits(localVisits);
+        });
+    }
+  }, []);
 
   // Parallax setup
   const mouseX = useMotionValue(0);
@@ -279,7 +317,7 @@ export default function App() {
           <h1 className="text-lg md:text-xl font-extrabold tracking-tight bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent mb-0.5">
             Cronología de la Tierra
           </h1>
-          <p className="text-slate-500 text-[9px] md:text-[10px] font-medium">
+          <p className="text-slate-500 text-[9px] md:text-[10px] font-medium leading-tight max-w-[160px] md:max-w-[190px]">
             Toda la historia de nuestro planeta en millones de años.
           </p>
         </div>
@@ -293,8 +331,13 @@ export default function App() {
               Activar 3D
             </button>
           )}
-          <div className="text-xl md:text-2xl font-black font-mono tracking-tighter text-blue-600 bg-blue-50 px-3 py-1 rounded-lg border border-blue-100 shadow-sm">
-            {Math.round(currentMa)} <span className="text-xs md:text-sm font-sans font-bold text-blue-400">Ma</span>
+          <div className="flex flex-col items-end">
+            <div className="text-xl md:text-2xl font-black font-mono tracking-tighter text-blue-600 bg-blue-50 px-3 py-1 rounded-lg border border-blue-100 shadow-sm leading-none">
+              {Math.round(currentMa)} <span className="text-xs md:text-sm font-sans font-bold text-blue-400">Ma</span>
+            </div>
+            <span className="text-[7px] md:text-[8px] text-slate-400 font-bold tracking-wider mt-1 pr-1">
+              VERS {visits}
+            </span>
           </div>
         </div>
       </header>
@@ -543,9 +586,9 @@ export default function App() {
 
       {/* Footer: Reproductor Muy Compacto */}
       <footer className="bg-white/85 backdrop-blur-md border-t border-white/20 p-2 md:p-3 shrink-0 z-20 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)]">
-        <div className="max-w-5xl mx-auto flex items-center gap-3 md:gap-6 px-2">
+        <div className="max-w-3xl mx-auto flex items-center gap-2 md:gap-4 px-2">
           
-          <div className="flex items-center gap-1 md:gap-2 shrink-0">
+          <div className="flex items-center gap-1 shrink-0">
             <button 
               onClick={() => {
                 const currentIndex = TIMELINE_EVENTS.findIndex(e => e.title === activeEvent.title);
@@ -555,27 +598,27 @@ export default function App() {
                   setCurrentMa(MAX_MA);
                 }
               }}
-              className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
+              className="w-6 h-6 md:w-7 md:h-7 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
               title="Continuar al siguiente evento"
             >
-              <SkipForward size={14} />
+              <SkipForward size={12} />
             </button>
             <button 
               onClick={() => {
                 setCurrentMa(MAX_MA);
                 setIsPlaying(false);
               }}
-              className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
+              className="w-6 h-6 md:w-7 md:h-7 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
               title="Reiniciar desde el principio"
             >
-              <RotateCcw size={14} />
+              <RotateCcw size={12} />
             </button>
             
             <button 
               onClick={() => setIsPlaying(!isPlaying)}
-              className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-md transition-transform active:scale-95 ml-1"
+              className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-md transition-transform active:scale-95 ml-1"
             >
-              {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="ml-0.5" />}
+              {isPlaying ? <Pause size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" className="ml-0.5" />}
             </button>
           </div>
           
@@ -590,10 +633,10 @@ export default function App() {
                 setCurrentMa(MAX_MA - Number(e.target.value));
                 setIsPlaying(false);
               }}
-              className="w-full h-1.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-blue-600 relative z-10"
+              className="w-full h-1 bg-slate-200 rounded-full appearance-none cursor-pointer accent-blue-600 relative z-10"
             />
             {/* Marcadores de eventos en el slider */}
-            <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1.5 pointer-events-none px-[4px]">
+            <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1 pointer-events-none px-[4px]">
               {TIMELINE_EVENTS.map((ev, i) => {
                 if (ev.ma === 0) return null;
                 const fraction = (MAX_MA - ev.ma) / MAX_MA;
@@ -609,11 +652,27 @@ export default function App() {
             </div>
           </div>
 
-          <div className="text-right shrink-0 min-w-[60px]">
-            <div className="text-sm md:text-base font-black font-mono text-blue-600 tracking-tighter">
-              {Math.round(currentMa)} <span className="text-[9px] md:text-[10px] text-blue-400 font-sans font-bold">Ma</span>
+          <div className="text-right shrink-0 min-w-[45px]">
+            <div className="text-xs md:text-sm font-black font-mono text-blue-600 tracking-tighter">
+              {Math.round(currentMa)} <span className="text-[8px] md:text-[9px] text-blue-400 font-sans font-bold">Ma</span>
             </div>
           </div>
+
+          {/* Logo Instagram */}
+          <a 
+            href="https://www.instagram.com/3d_mc_3d/" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="shrink-0 hover:scale-110 transition-transform duration-200 ml-1 md:ml-2"
+            title="Sígueme en Instagram"
+          >
+            <img 
+              src="https://avatars.githubusercontent.com/u/70527971?v=4&size=64" 
+              alt="3D MC 3D" 
+              className="w-6 h-6 md:w-7 md:h-7 rounded-full border border-slate-300 shadow-sm"
+              referrerPolicy="no-referrer"
+            />
+          </a>
 
         </div>
       </footer>
