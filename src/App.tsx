@@ -40,15 +40,20 @@ const MAX_MA = 4600;
 
 const Stars = () => {
   const stars = useMemo(() => {
-    return Array.from({ length: 200 }).map((_, i) => ({
+    // Reducimos la cantidad de estrellas para optimizar rendimiento en móviles
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+    const starCount = isMobile ? 40 : 100;
+
+    return Array.from({ length: starCount }).map((_, i) => ({
       id: i,
       left: Math.random() * 100 + '%',
       top: Math.random() * 100 + '%',
-      size: Math.random() * 2.5 + 1,
-      opacity: Math.random() * 0.8 + 0.2,
-      isTwinkling: Math.random() > 0.5,
+      size: Math.random() * 2 + 1,
+      opacity: Math.random() * 0.6 + 0.2,
+      // Solo un 15% de las estrellas titilan para ahorrar CPU/GPU
+      isTwinkling: Math.random() > 0.85,
       animationDelay: `${Math.random() * 5}s`,
-      animationDuration: `${Math.random() * 3 + 2}s`
+      animationDuration: `${Math.random() * 3 + 3}s`
     }));
   }, []);
 
@@ -150,10 +155,12 @@ export default function App() {
           // Re-attach the listener now that we have permission
           const handleDeviceOrientation = (e: DeviceOrientationEvent) => {
             if (e.gamma !== null && e.beta !== null) {
-              const x = Math.max(-1, Math.min(1, e.gamma / 45));
-              const y = Math.max(-1, Math.min(1, (e.beta - 45) / 45));
-              mouseX.set(x);
-              mouseY.set(y);
+              requestAnimationFrame(() => {
+                const x = Math.max(-1, Math.min(1, e.gamma! / 45));
+                const y = Math.max(-1, Math.min(1, (e.beta! - 45) / 45));
+                mouseX.set(x);
+                mouseY.set(y);
+              });
             }
           };
           window.addEventListener('deviceorientation', handleDeviceOrientation);
@@ -165,31 +172,43 @@ export default function App() {
   };
 
   useEffect(() => {
+    let tickingMouse = false;
     const handleMouseMove = (e: MouseEvent) => {
       if (isPlaying || isDragging) return;
-      const x = (e.clientX / window.innerWidth) * 2 - 1;
-      const y = (e.clientY / window.innerHeight) * 2 - 1;
-      mouseX.set(x);
-      mouseY.set(y);
-    };
-
-    const handleDeviceOrientation = (e: DeviceOrientationEvent) => {
-      if (isPlaying || isDragging) return;
-      if (e.gamma !== null && e.beta !== null) {
-        // gamma: inclinación izquierda/derecha (-90 a 90). Limitamos de -45 a 45 para mayor sensibilidad.
-        const x = Math.max(-1, Math.min(1, e.gamma / 45));
-        // beta: inclinación adelante/atrás (-180 a 180). Restamos 45 para que sostenerlo a 45 grados sea el "centro" (0).
-        const y = Math.max(-1, Math.min(1, (e.beta - 45) / 45));
-        
-        mouseX.set(x);
-        mouseY.set(y);
+      if (!tickingMouse) {
+        requestAnimationFrame(() => {
+          const x = (e.clientX / window.innerWidth) * 2 - 1;
+          const y = (e.clientY / window.innerHeight) * 2 - 1;
+          mouseX.set(x);
+          mouseY.set(y);
+          tickingMouse = false;
+        });
+        tickingMouse = true;
       }
     };
 
-    window.addEventListener('mousemove', handleMouseMove);
+    let tickingOrientation = false;
+    const handleDeviceOrientation = (e: DeviceOrientationEvent) => {
+      if (isPlaying || isDragging) return;
+      if (e.gamma !== null && e.beta !== null && !tickingOrientation) {
+        requestAnimationFrame(() => {
+          // gamma: inclinación izquierda/derecha (-90 a 90). Limitamos de -45 a 45 para mayor sensibilidad.
+          const x = Math.max(-1, Math.min(1, e.gamma! / 45));
+          // beta: inclinación adelante/atrás (-180 a 180). Restamos 45 para que sostenerlo a 45 grados sea el "centro" (0).
+          const y = Math.max(-1, Math.min(1, (e.beta! - 45) / 45));
+          
+          mouseX.set(x);
+          mouseY.set(y);
+          tickingOrientation = false;
+        });
+        tickingOrientation = true;
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
     
     if (!needsSensorPermission) {
-      window.addEventListener('deviceorientation', handleDeviceOrientation);
+      window.addEventListener('deviceorientation', handleDeviceOrientation, { passive: true });
     }
     
     return () => {
